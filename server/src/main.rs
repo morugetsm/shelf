@@ -8,8 +8,8 @@ use std::net::SocketAddr;
 async fn main() {
     let app = Router::new()
         .route("/", get(root))
-        .route("/user", get(controllers::user::get))
-        .route("/user/:idx", get(controllers::user::get));
+        .route("/user", get(controllers::user::get).delete(controllers::user::delete))
+        .route("/user/:idx", get(controllers::user::get).delete(controllers::user::delete));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
 

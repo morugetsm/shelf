@@ -26,34 +26,37 @@ impl From<PgRow> for User {
     }
 }
 
-pub async fn select(
-    idx: Option<u32>,
-    params: Option<HashMap<String, String>>,
-) -> Result<Response<User>, Error> {
+pub async fn select(params: HashMap<String, String>) -> Result<Response<User>, Error> {
     let mut conn = connect().await?;
 
-    let mut builder = String::from("SELECT count(*) OVER() AS total, * FROM \"user\" ");
-
-    if let Some(idx) = idx {
-        builder.push_str(&format!("WHERE idx={} ", idx));
-    }
-
-    if let Some(params) = params {
-        if let Some(username) = params.get("username") {
-            if builder.contains("WHERE") {
-                builder.push_str(&format!("AND username=\'{}\' ", username));
-            } else {
-                builder.push_str(&format!("WHERE username=\'{}\' ", username));
-            }
-        }
-        builder.push_str(&loos(params));
-    }
+    let mut builder = String::from("SELECT count(*) OVER() AS total, * FROM public.user ");
+    builder.push_str(&make_where(&params, vec!["removed", "idx", "username"]));
+    builder.push_str(&make_oslo(&params));
 
     println!("{}", builder);
 
     let query = query(&builder);
+    let results = query.fetch_all(&mut conn).await?;
+    Ok(Response::from(results))
+}
 
-    let rows = query.fetch_all(&mut conn).await?;
+pub async fn delete(idx: u32) -> Result<Option<User>, Error> {
+    let mut conn = connect().await?;
 
-    Ok(Response::from(rows))
+    let check = format!("SELECT idx from public.user where idx={}", idx);
+    if let Err(exist) = query(&check).fetch_one(&mut conn).await {
+        return Err(exist);
+    }
+    
+    let builder = format!("UPDATE public.user SET removed='true', udate=NOW() WHERE idx={} AND removed='false' RETURNING *", idx);
+    
+    println!("{}", builder);
+    
+    let query = query(&builder);
+    let result = query.fetch_optional(&mut conn).await?;
+    if let Some(row) = result {
+        Ok(Some(User::from(row)))
+    } else {
+        Ok(None)
+    }
 }

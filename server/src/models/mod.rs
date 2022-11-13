@@ -37,8 +37,34 @@ where
     }
 }
 
-pub fn loos(params: HashMap<String, String>) -> String {
+pub fn make_where(params: &HashMap<String, String>, keys: Vec<&str>) -> String {
+    let mut where_vec = Vec::new();
+
+    for (key, value) in params.iter() {
+        if keys.contains(&key.as_str()) {
+            where_vec.push(format!("{}='{}' ", key, value));
+        }
+    }
+
+    if where_vec.len() > 0 {
+        let mut result = String::from("WHERE ");
+        result.push_str(&where_vec.join("AND "));
+        result
+    } else {
+        String::new()
+    }
+}
+
+pub fn make_oslo(params: &HashMap<String, String>) -> String {
     let mut result = String::new();
+
+    if let Some(order) = params.get("order") {
+        if let Some(sort) = params.get("sort") {
+            if !order.is_empty() && !sort.is_empty() {
+                result.push_str(&format!("ORDER BY {} {} ", order, sort));
+            }
+        }
+    }
 
     if let Some(limit) = params.get("limit") {
         if !limit.is_empty() {
@@ -47,13 +73,6 @@ pub fn loos(params: HashMap<String, String>) -> String {
                 if !offset.is_empty() {
                     result.push_str(&format!("OFFSET {} ", offset));
                 }
-            }
-        }
-    }
-    if let Some(order) = params.get("order") {
-        if let Some(sort) = params.get("sort") {
-            if !order.is_empty() && !sort.is_empty() {
-                result.push_str(&format!("ORDER BY {} {} ", order, sort));
             }
         }
     }
