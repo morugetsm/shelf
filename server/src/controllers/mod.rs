@@ -1,14 +1,32 @@
-use axum::{http::StatusCode, response::IntoResponse, Json};
-use serde::Serialize;
-use std::default::Default;
+use axum::http::StatusCode;
+use std::io::ErrorKind;
 
 pub mod user;
 
-pub fn make_response(
-    result: Result<impl IntoResponse + Default + Serialize, impl std::error::Error>,
-) -> (StatusCode, impl IntoResponse) {
-    match result {
-        Ok(res) => (StatusCode::OK, Json::from(res)),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json::default()),
+trait IntoStatusCode {
+    fn into_status_code(self) -> StatusCode;
+}
+
+impl IntoStatusCode for sqlx::Error {
+    fn into_status_code(self) -> StatusCode {
+        println!("response error: {:#?}", self);
+
+        match self {
+            sqlx::Error::RowNotFound => StatusCode::NOT_FOUND,
+            sqlx::Error::Database(ref e) => {
+                let e: &sqlx::postgres::PgDatabaseError = e.downcast_ref();
+                println!("database error: {:#?}", e);
+                match e.code() {
+                    "23505" => StatusCode::CONFLICT,
+                    "42601" => StatusCode::INTERNAL_SERVER_ERROR, // SQL syntax error
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                }
+            }
+            sqlx::Error::Io(e) => match e.kind() {
+                ErrorKind::ConnectionRefused => StatusCode::SERVICE_UNAVAILABLE,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            },
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }

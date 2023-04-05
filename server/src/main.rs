@@ -11,10 +11,13 @@ async fn main() {
 
     {
         use controllers::user as con;
-        app = app.route("/user", get(con::get_all).post(con::post)).route(
-            "/user/:id",
-            get(con::get_one).patch(con::patch).delete(con::delete),
-        );
+        app = app
+            .route("/user", get(con::get).post(con::post))
+            .route("/user/", get(con::get).post(con::post))
+            .route(
+                "/user/:id",
+                get(con::get).patch(con::patch).delete(con::delete),
+            );
     }
 
     // app = app.layer(CorsLayer::new().allow_origin(Any));

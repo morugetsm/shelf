@@ -104,8 +104,10 @@ pub async fn update(id: u32, data: UserReq) -> Result<Option<UserRes>, Error> {
     let mut conn = connect().await?;
 
     let builder = format!(
-        "UPDATE public.user SET (username, password, name, admin_yn) = ({}, {}, {}, {})",
-        data.username, data.password, data.name, true
+        r"UPDATE public.user 
+        SET (username, password, name, admin_yn) = ('{}', '{}', '{}', {}) 
+        WHERE id = {} RETURNING *",
+        data.username, data.password, data.name, true, id
     );
 
     let query = query(&builder);
@@ -124,7 +126,12 @@ pub async fn delete(id: u32) -> Result<Option<UserRes>, Error> {
     let check = format!("SELECT id from public.user where id={}", id);
     query(&check).fetch_one(&mut conn).await?;
 
-    let builder = format!("UPDATE public.user SET remove_yn='true', udate=NOW() WHERE id={} AND remove_yn='false' RETURNING *", id);
+    let builder = format!(
+        r"UPDATE public.user 
+        SET remove_yn='true', udate=NOW() 
+        WHERE id={} AND remove_yn='false' RETURNING *",
+        id
+    );
 
     println!("{}", builder);
 
