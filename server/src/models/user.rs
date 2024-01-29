@@ -8,7 +8,7 @@ pub struct UserRes {
     id: i32,
     username: String,
     name: String,
-    admin_yn: bool,
+    admin: bool,
     reg_date: NaiveDateTime,
     mod_date: Option<NaiveDateTime>,
 }
@@ -19,7 +19,7 @@ impl From<MySqlRow> for UserRes {
             id: row.get("id"),
             username: row.get("username"),
             name: row.get("name"),
-            admin_yn: row.get("admin_yn"),
+            admin: row.get("admin_yn"),
             reg_date: row.get("reg_date"),
             mod_date: row.get("mod_date"),
         }
@@ -31,7 +31,7 @@ pub struct UserReq {
     username: String,
     password: String,
     name: String,
-    admin_yn: Option<bool>,
+    admin: Option<bool>,
 }
 
 pub async fn select_list(params: &HashMap<String, String>) -> Result<List<UserRes>, Error> {
@@ -73,7 +73,7 @@ pub async fn select_item(id: u32) -> Result<UserRes, Error> {
     Ok(UserRes::from(row))
 }
 
-pub async fn insert(data: UserReq) -> Result<UserRes, Error> {
+pub async fn insert(data: UserReq) -> Result<Option<UserRes>, Error> {
     let mut conn = connect().await?;
 
     let query = r#"INSERT
@@ -85,27 +85,35 @@ pub async fn insert(data: UserReq) -> Result<UserRes, Error> {
         .bind(data.username)
         .bind(data.password)
         .bind(data.name)
-        .bind(data.admin_yn.unwrap_or(false))
-        .fetch_one(&mut conn)
+        .bind(data.admin.unwrap_or(false))
+        .fetch_optional(&mut conn)
         .await?;
 
-    Ok(UserRes::from(result))
+    if let Some(row) = result {
+        Ok(Some(UserRes::from(row)))
+    } else {
+        Ok(None)
+    }
 }
 
 pub async fn update(id: u32, data: UserReq) -> Result<Option<UserRes>, Error> {
     let mut conn = connect().await?;
 
-    let query = format!(
-        r"UPDATE
+    let query = r"UPDATE
             auth_user 
         SET
-            (username, password, name, admin_yn) = ('{}', '{}', '{}', {}) 
+            (username, password, name, admin_yn) = (?, ?, ?, ?) 
         WHERE
-            id = {}
-        RETURNING *",
-        data.username, data.password, data.name, true, id
-    );
-    let result = sqlx::query(&query).fetch_optional(&mut conn).await?;
+            id = ? AND delete_yn = 0
+        RETURNING *";
+    let result = sqlx::query(&query)
+        .bind(data.username)
+        .bind(data.password)
+        .bind(data.name)
+        .bind(data.admin)
+        .bind(id)
+        .fetch_optional(&mut conn)
+        .await?;
 
     if let Some(row) = result {
         Ok(Some(UserRes::from(row)))

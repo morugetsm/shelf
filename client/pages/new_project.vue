@@ -3,7 +3,7 @@ import { reactive } from 'vue';
 
 let { data: user_data, error } = await useFetch('/api/user');
 
-console.log('d', user_data, error);
+console.log('new_project', user_data, error);
 
 let { total: user_total, records: user_records } = user_data.value;
 
