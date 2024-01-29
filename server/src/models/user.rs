@@ -1,28 +1,7 @@
 use super::*;
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, query, Error, Row};
-
-#[derive(Debug, Default, Serialize, sqlx::FromRow)]
-pub struct UserRow {
-    username: String,
-    name: String,
-    admin_yn: bool,
-    rdate: NaiveDateTime,
-    udate: Option<NaiveDateTime>,
-}
-
-impl From<PgRow> for UserRow {
-    fn from(row: PgRow) -> Self {
-        UserRow {
-            username: row.get("username"),
-            name: row.get("name"),
-            admin_yn: row.get("admin_yn"),
-            rdate: row.get("rdate"),
-            udate: row.get("udate"),
-        }
-    }
-}
+use sqlx::{Error, QueryBuilder, Row};
 
 #[derive(Debug, Default, Serialize, sqlx::FromRow)]
 pub struct UserRes {
@@ -30,19 +9,19 @@ pub struct UserRes {
     username: String,
     name: String,
     admin_yn: bool,
-    rdate: NaiveDateTime,
-    udate: Option<NaiveDateTime>,
+    reg_date: NaiveDateTime,
+    mod_date: Option<NaiveDateTime>,
 }
 
-impl From<PgRow> for UserRes {
-    fn from(row: PgRow) -> Self {
+impl From<MySqlRow> for UserRes {
+    fn from(row: MySqlRow) -> Self {
         UserRes {
             id: row.get("id"),
             username: row.get("username"),
             name: row.get("name"),
             admin_yn: row.get("admin_yn"),
-            rdate: row.get("rdate"),
-            udate: row.get("udate"),
+            reg_date: row.get("reg_date"),
+            mod_date: row.get("mod_date"),
         }
     }
 }
@@ -55,64 +34,79 @@ pub struct UserReq {
     admin_yn: Option<bool>,
 }
 
-pub async fn select_list(params: HashMap<String, String>) -> Result<List<UserRow>, Error> {
+pub async fn select_list(params: &HashMap<String, String>) -> Result<List<UserRes>, Error> {
     let mut conn = connect().await?;
 
-    let mut builder = String::from("SELECT count(*) OVER() AS total, * FROM public.user ");
-    builder.push_str(&make_where(&params, vec!["id", "username", "remove_yn"]));
-    builder.push_str(&make_solo(&params));
+    let mut builder = QueryBuilder::new("SELECT *, count(*) AS total FROM auth_user WHERE true");
 
-    println!("{}", builder);
+    if let Some(username) = params.get("username") {
+        builder.push(" AND username LIKE ").push_bind(username);
+    }
+    if let Some(name) = params.get("name") {
+        builder.push(" AND name LIKE ").push_bind(name);
+    }
+    builder.push(" AND delete_yn = ").push_bind(0);
 
-    let query = query(&builder);
-    let results = query.fetch_all(&mut conn).await?;
-    Ok(List::from(results))
+    let Solo {
+        sort,
+        order,
+        limit,
+        offset,
+    } = Solo::from(params);
+
+    builder.push(" ORDER BY ").push_bind(sort);
+    builder.push(" ").push(order);
+    builder.push(" LIMIT ").push_bind(limit);
+    builder.push(" OFFSET ").push_bind(offset);
+
+    let rows = builder.build().fetch_all(&mut conn).await?;
+
+    Ok(List::from(rows))
 }
 
 pub async fn select_item(id: u32) -> Result<UserRes, Error> {
     let mut conn = connect().await?;
 
-    let builder = format!("SELECT * FROM public.user WHERE id = {}", id);
+    let query = "SELECT * FROM auth_user WHERE id = ?";
 
-    println!("{}", builder);
-
-    let query = query(&builder);
-    let row = query.fetch_one(&mut conn).await?;
+    let row = sqlx::query(query).bind(id).fetch_one(&mut conn).await?;
     Ok(UserRes::from(row))
 }
 
 pub async fn insert(data: UserReq) -> Result<UserRes, Error> {
     let mut conn = connect().await?;
 
-    let builder = format!(
-        r#"
-        INSERT INTO public.user 
-        (username, password, name, admin_yn) 
-        VALUES ('{}', '{}', '{}', {}) RETURNING *"#,
-        data.username,
-        data.password,
-        data.name,
-        data.admin_yn.unwrap_or(false)
-    );
+    let query = r#"INSERT
+        INTO auth_user (username, password, name, admin_yn)
+    VALUES
+        (?, ?, ?, ?)
+    RETURNING *"#;
+    let result = sqlx::query(query)
+        .bind(data.username)
+        .bind(data.password)
+        .bind(data.name)
+        .bind(data.admin_yn.unwrap_or(false))
+        .fetch_one(&mut conn)
+        .await?;
 
-    let query = query(&builder);
-    let result = query.fetch_one(&mut conn).await?;
     Ok(UserRes::from(result))
 }
 
 pub async fn update(id: u32, data: UserReq) -> Result<Option<UserRes>, Error> {
     let mut conn = connect().await?;
 
-    let builder = format!(
-        r"UPDATE public.user 
-        SET (username, password, name, admin_yn) = ('{}', '{}', '{}', {}) 
-        WHERE id = {} RETURNING *",
+    let query = format!(
+        r"UPDATE
+            auth_user 
+        SET
+            (username, password, name, admin_yn) = ('{}', '{}', '{}', {}) 
+        WHERE
+            id = {}
+        RETURNING *",
         data.username, data.password, data.name, true, id
     );
+    let result = sqlx::query(&query).fetch_optional(&mut conn).await?;
 
-    let query = query(&builder);
-
-    let result = query.fetch_optional(&mut conn).await?;
     if let Some(row) = result {
         Ok(Some(UserRes::from(row)))
     } else {
@@ -123,20 +117,21 @@ pub async fn update(id: u32, data: UserReq) -> Result<Option<UserRes>, Error> {
 pub async fn delete(id: u32) -> Result<Option<UserRes>, Error> {
     let mut conn = connect().await?;
 
-    let check = format!("SELECT id from public.user where id={}", id);
-    query(&check).fetch_one(&mut conn).await?;
+    let query = "SELECT id from auth_user where id = ?";
+    sqlx::query(query).bind(id).fetch_one(&mut conn).await?;
 
-    let builder = format!(
-        r"UPDATE public.user 
-        SET remove_yn='true', udate=NOW() 
-        WHERE id={} AND remove_yn='false' RETURNING *",
-        id
-    );
+    let query = r"UPDATE
+            auth_user 
+        SET
+            delete_yn = 1, mod_date = NOW() 
+        WHERE
+            id = ? AND delete_yn = 0
+        RETURNING *";
+    let result = sqlx::query(query)
+        .bind(id)
+        .fetch_optional(&mut conn)
+        .await?;
 
-    println!("{}", builder);
-
-    let query = query(&builder);
-    let result = query.fetch_optional(&mut conn).await?;
     if let Some(row) = result {
         Ok(Some(UserRes::from(row)))
     } else {

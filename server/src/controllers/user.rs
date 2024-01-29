@@ -1,11 +1,11 @@
 use crate::{controllers::IntoStatusCode, models::user as model};
+use std::collections::HashMap;
 
 use axum::{
     extract::{Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
 };
-use std::collections::HashMap;
 
 pub async fn get(
     id: Option<Path<u32>>,
@@ -23,7 +23,7 @@ pub async fn get(
         None => {
             let Query(params) = params;
 
-            let result = model::select_list(params).await;
+            let result = model::select_list(&params).await;
 
             match result {
                 Ok(res) => Json::from(res).into_response(),

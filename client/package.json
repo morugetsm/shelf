@@ -1,5 +1,6 @@
 {
-  "name": "nuxt-app",
+  "name": "shelf-client",
+  "author": "shouu6",
   "private": true,
   "scripts": {
     "build": "nuxt build",
@@ -9,6 +10,16 @@
     "postinstall": "nuxt prepare"
   },
   "devDependencies": {
-    "nuxt": "^3.3.2"
+    "@nuxt/devtools": "latest",
+    "@nuxtjs/color-mode": "latest",
+    "@nuxtjs/i18n": "next",
+    "@nuxtjs/tailwindcss": "latest",
+    "@types/node": "latest",
+    "nuxt": "latest",
+    "nuxt-headlessui": "latest",
+    "sass": "latest"
+  },
+  "dependencies": {
+    "@heroicons/vue": "latest"
   }
 }

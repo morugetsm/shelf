@@ -9,24 +9,26 @@ trait IntoStatusCode {
 
 impl IntoStatusCode for sqlx::Error {
     fn into_status_code(self) -> StatusCode {
-        println!("response error: {:#?}", self);
+        tracing::error!("response error: {:#?}", self);
 
-        match self {
-            sqlx::Error::RowNotFound => StatusCode::NOT_FOUND,
+        let error_code = match self {
+            sqlx::Error::RowNotFound => Some(StatusCode::NOT_FOUND),
             sqlx::Error::Database(ref e) => {
-                let e: &sqlx::postgres::PgDatabaseError = e.downcast_ref();
-                println!("database error: {:#?}", e);
+                let e: &sqlx::mysql::MySqlDatabaseError = e.downcast_ref();
+                tracing::error!("database error: {:#?}", e);
                 match e.code() {
-                    "23505" => StatusCode::CONFLICT,
-                    "42601" => StatusCode::INTERNAL_SERVER_ERROR, // SQL syntax error
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                    Some("23505") => Some(StatusCode::CONFLICT),
+                    Some("42601") => Some(StatusCode::INTERNAL_SERVER_ERROR), // SQL syntax error
+                    _ => None,
                 }
             }
             sqlx::Error::Io(e) => match e.kind() {
-                ErrorKind::ConnectionRefused => StatusCode::SERVICE_UNAVAILABLE,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorKind::ConnectionRefused => Some(StatusCode::SERVICE_UNAVAILABLE),
+                _ => None,
             },
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        }
+            _ => None,
+        };
+
+        error_code.unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }

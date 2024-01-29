@@ -1,0 +1,50 @@
+@use "~/assets/color.scss" as *;
+
+:root {
+  background-color: $teal-50;
+}
+
+div.card {
+  padding: 1rem;
+
+  border-radius: 0.5rem;
+  background-color: $teal-100;
+
+  display: flex;
+  flex-flow: column nowrap;
+  gap: 1rem;
+}
+
+input {
+  width: 100%;
+  height: 2rem;
+  padding: 0 0.25rem;
+
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  background-color: $zinc-50;
+
+  box-sizing: border-box;
+  transition: border 0.1s ease-in-out 0s;
+
+  &:focus-visible {
+    border: 1px solid $teal-700;
+    outline: none;
+  }
+}
+
+button {
+  padding: 0.25rem 0.75rem;
+
+  font-size: 0.875rem;
+  border-radius: 0.25rem;
+  color: $teal-50;
+  background-color: $teal-500;
+
+  align-self: flex-end;
+  cursor: pointer;
+
+  &:hover {
+    filter: opacity(0.8);
+  }
+}

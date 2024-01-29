@@ -1,3 +1,4 @@
 # shelf
-server: axum + postgresql
+server: axum + mariadb
+
 client: vue + nuxt
